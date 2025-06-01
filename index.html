@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL LOCKER🔐</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin: 20px 0;
+            text-align: left;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input::placeholder {
+            color: #aaa;
+        }
+        button {
+            padding: 12px 25px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #encryptSection, #decryptSection, #resultSection {
+            display: none;
+            margin-top: 30px;
+        }
+        .result-box {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            word-break: break-all;
+        }
+        .result-url {
+            color: #1a73e8;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        #qrcode {
+            margin: 20px auto;
+            width: 200px;
+            height: 200px;
+            border: 1px solid #eee;
+        }
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>URL LOCKER🔐</h1>
+    
+    <!-- 암호화 모드 -->
+    <div id="encryptSection">
+        <div class="input-group">
+            <label>URL🔗</label>
+            <input type="text" id="urlInput" placeholder="https://example.com/">
+        </div>
+        <div class="input-group">
+            <label>KEY🔑</label>
+            <input type="password" id="keyInput" placeholder="******">
+        </div>
+        <button onclick="encryptURL()">LOCK IT!</button>
+    </div>
+    
+    <!-- 복호화 모드 -->
+    <div id="decryptSection">
+        <div class="input-group">
+            <label>KEY🔑</label>
+            <input type="password" id="decryptKeyInput" placeholder="암호화에 사용한 KEY 입력">
+        </div>
+        <button onclick="decryptURL()">UNLOCK</button>
+    </div>
+    
+    <!-- 결과 섹션 -->
+    <div id="resultSection">
+        <div class="result-box">
+            <p>🔒 암호화된 URL:</p>
+            <div class="result-url" id="encryptedUrl"></div>
+            <img id="qrcode" alt="QR Code">
+            <div class="button-group">
+                <button onclick="copyToClipboard()">Copy URL</button>
+                <button onclick="downloadQR()">Download QR</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 페이지 로드 시 모드 체크
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hash = urlParams.get('hash');
+            
+            if (hash) {
+                document.getElementById('encryptSection').style.display = 'none';
+                document.getElementById('decryptSection').style.display = 'block';
+                document.title = "URL UNLOCKER🔓";
+            } else {
+                document.getElementById('encryptSection').style.display = 'block';
+            }
+        });
+
+        // 암호화 함수
+        function encryptURL() {
+            const url = document.getElementById("urlInput").value.trim();
+            const key = document.getElementById("keyInput").value.trim();
+            
+            if (!url || !key) {
+                alert("입력값을 확인해주세요."); // 모호한 오류 메시지
+                return;
+            }
+            
+            const encryptedBase64 = encryptAES(url, key);
+            const currentUrl = window.location.href.split('?')[0];
+            encryptedUrl = `${currentUrl}?hash=${encodeURIComponent(encryptedBase64)}`;
+            
+            document.getElementById("encryptSection").style.display = "none";
+            document.getElementById("resultSection").style.display = "block";
+            document.getElementById("encryptedUrl").textContent = encryptedUrl;
+            
+            QRCode.toDataURL(encryptedUrl, { errorCorrectionLevel: 'H' }, (err, url) => {
+                if (!err) document.getElementById("qrcode").src = url;
+            });
+        }
+
+        // 복호화 함수 (보안 강화: 실패 시 아무 동작 없음)
+        function decryptURL() {
+            const key = document.getElementById("decryptKeyInput").value.trim();
+            if (!key) return; // KEY가 비어있으면 무시
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const hash = urlParams.get('hash');
+            if (!hash) return;
+            
+            try {
+                const decryptedUrl = decryptAES(decodeURIComponent(hash), key);
+                if (decryptedUrl) {
+                    window.location.href = decryptedUrl; // 성공 시에만 리다이렉트
+                }
+                // 실패 시 아무런 피드백 없음
+            } catch (e) {
+                // 콘솔 로그도 제거 (보안 강화)
+            }
+        }
+
+        // 암호화/복호화 함수
+        function encryptAES(text, key) {
+            const keyHash = CryptoJS.SHA256(key);
+            const iv = CryptoJS.lib.WordArray.random(16);
+            const encrypted = CryptoJS.AES.encrypt(text, keyHash, {
+                iv: iv,
+                mode: CryptoJS.mode.CBC,
+                padding: CryptoJS.pad.Pkcs7
+            });
+            const salt = CryptoJS.lib.WordArray.random(8);
+            const salted = CryptoJS.enc.Hex.parse("53616c7465645f5f");
+            const concatenated = salted.concat(salt).concat(iv).concat(encrypted.ciphertext);
+            return CryptoJS.enc.Base64.stringify(concatenated);
+        }
+
+        function decryptAES(encryptedBase64, key) {
+            const keyHash = CryptoJS.SHA256(key);
+            const encryptedData = CryptoJS.enc.Base64.parse(encryptedBase64);
+            const salt = encryptedData.clone().words.slice(2, 4);
+            const iv = encryptedData.clone().words.slice(4, 8);
+            const ciphertext = encryptedData.clone().words.slice(8);
+            
+            const decrypted = CryptoJS.AES.decrypt(
+                { ciphertext: CryptoJS.lib.WordArray.create(ciphertext) },
+                keyHash,
+                { iv: CryptoJS.lib.WordArray.create(iv) }
+            );
+            return decrypted.toString(CryptoJS.enc.Utf8);
+        }
+
+        // 복사 및 다운로드
+        function copyToClipboard() {
+            navigator.clipboard.writeText(encryptedUrl)
+                .then(() => alert("URL이 복사되었습니다! 📋"));
+        }
+        
+        function downloadQR() {
+            const qrImg = document.getElementById("qrcode");
+            if (qrImg.src) {
+                const a = document.createElement("a");
+                a.href = qrImg.src;
+                a.download = "encrypted-url-qr.png";
+                a.click();
+            }
+        }
+    </script>
+</body>
+</html>
